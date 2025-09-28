@@ -2,82 +2,61 @@
 Script for Part A & B
 
 """
+
 import pandas as pd
 import numpy as np
 
-# === Load Data ===
-file_path = "Data for Assignment 4.xlsx"  # adjust if needed
-df = pd.read_excel(file_path, sheet_name="Blad1")
+# --- Load data ---
+path = "Data for Assignment 4.xlsx"
+df = pd.read_excel(path, sheet_name=0)
 
 # Clean column names
-df.columns = [c.strip() for c in df.columns]
+df.columns = [c.strip() if isinstance(c, str) else c for c in df.columns]
 
-# Convert arrival date
-df['Arrival data'] = pd.to_datetime(df['Arrival data'], errors='coerce')
+# Parse dates
+df['Arrival data'] = pd.to_datetime(df['Arrival data'], dayfirst=True, errors='coerce')
 
-# Convert Expected Surgery Time (hh:mm:ss) → minutes
-def to_minutes_safe(val):
+# Convert expected surgery time to minutes (numeric)
+def to_minutes(x):
+    if pd.isna(x):
+        return np.nan
     try:
-        parts = str(val).split(":")
-        if len(parts) == 3:
-            h, m, s = map(int, parts)
-            return h*60 + m + s/60
-        return np.nan
-    except:
+        td = pd.to_timedelta(str(x))
+        return td.total_seconds() / 60
+    except Exception:
         return np.nan
 
-df['Expected_minutes'] = df['Expected surgery time'].apply(to_minutes_safe)
+df['expected_minutes'] = df['Expected surgery time'].apply(to_minutes)
 
-# === PART A ANALYSIS ===
+# --- Group by Ward ---
+ward_groups = df.groupby('ward')
 
-# Patient counts per ward
-ward_counts = df['ward'].value_counts()
+summary = ward_groups['expected_minutes'].agg(
+    count='count',
+    mean_minutes='mean',
+    median_minutes='median',
+    total_minutes='sum'
+).reset_index()
+
+# Calculate 8-hour (480 min) OR sessions required
+summary['sessions_needed'] = summary['total_minutes'] / 480
 
 # Urgency distribution per ward
 urgency_dist = df.groupby(['ward', 'Urgency']).size().unstack(fill_value=0)
 
-# Ward-level summary
-ward_summary = df.groupby('ward').agg(
-    patients=('patientnr', 'count'),
-    total_expected_minutes=('Expected_minutes', 'sum'),
-    avg_expected_minutes=('Expected_minutes', 'mean'),
-    median_expected_minutes=('Expected_minutes', 'median'),
-    avg_los=('LOS Ward', 'mean'),
-    median_los=('LOS Ward', 'median')
-).reset_index()
+# ASA distribution per ward
+asa_dist = df.groupby(['ward', 'ASAClass']).size().unstack(fill_value=0)
 
-# Estimate sessions needed
-# One session = 8 hours = 480 minutes
-ward_summary['sessions_needed_total'] = ward_summary['total_expected_minutes'] / 480
+print("=== Patient Group Summary by Ward ===")
+print(summary.round(2))
 
-# Planning window = Feb 1, 2010 – Jan 31, 2013 (~156 weeks)
-planning_start = pd.Timestamp("2010-02-01")
-planning_end = pd.Timestamp("2013-01-31")
-weeks_in_window = ((planning_end - planning_start).days + 1) / 7
-
-ward_summary['sessions_per_week'] = ward_summary['sessions_needed_total'] / weeks_in_window
-
-# Round for readability
-ward_summary = ward_summary.round({
-    'avg_expected_minutes': 1,
-    'median_expected_minutes': 1,
-    'avg_los': 1,
-    'median_los': 1,
-    'sessions_per_week': 2
-})
-
-# pd.set_option("display.max_columns", None)  # show all columns
-# pd.set_option("display.max_rows", None)     # show all rows
-# pd.set_option("display.width", 0)           # don't wrap lines
-
-# # === OUTPUTS === 
-print("\nPatient Counts per Ward:")
-print(ward_counts)
-
-print("\nUrgency Distribution per Ward:")
+print("\n=== Urgency Distribution ===")
 print(urgency_dist)
 
-print("\nWard Summary (Part A):")
-print(ward_summary.to_string(index=False))
+print("\n=== ASA Distribution ===")
+print(asa_dist)
 
-
+# --- Suggested cycle length ---
+# Here we use 4 weeks (20 working days) as a practical cycle length for master surgery schedules
+cycle_length_days = 28
+print("\nChosen cycle length: {} days (4 weeks)".format(cycle_length_days))
