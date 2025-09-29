@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta
 
-
 # Load and Prepare the Data
 
 # Load the Excel dataset
