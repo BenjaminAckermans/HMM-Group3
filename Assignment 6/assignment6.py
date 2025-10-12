@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 # -----------------------------
 # EDIT THIS PATH before running
-DATA_PATH = "/Users/ariannaperini/Downloads/Data for Assignment 6.xlsx"
+DATA_PATH = r"C:\Users\20222277\OneDrive - TU Eindhoven\Desktop\ID2025\1CK110\HMM-Group3\Assignment 6\Data for Assignment 6.xlsx"
 # -----------------------------
 
 # Load workbook
@@ -251,47 +251,89 @@ print(refined.to_string(index=False))
 # PART C — create a 13-week rotating schedule
 # -----------------------------
 print("\n=== PART C: 13-week schedule ===")
-# Build weekly template: ward × weekday using mean per-day split converted to nurses using refined effective_hours
+
 weekdays = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+
+# Step 1. Build weekly template (ward × weekday) using mean daily hours → nurses
 weekly_template = []
 for ward in SPECIAL_WARDS:
     for wd in weekdays:
-        sub = agg[(agg["ward"]==ward) & (agg["weekday"]==wd)]
+        sub = agg[(agg["ward"] == ward) & (agg["weekday"] == wd)]
         if sub.empty:
-            m=e=n=0.0
+            m = e = n = 0.0
         else:
-            m = sub["morning_hours"].mean(); e = sub["evening_hours"].mean(); n = sub["night_hours"].mean()
-        m_n = math.ceil(m / effective_hours); e_n = math.ceil(e / effective_hours); n_n = math.ceil(n / effective_hours)
-        weekly_template.append({"ward": ward, "weekday": wd, "morning_nurses": m_n, "evening_nurses": e_n, "night_nurses": n_n})
+            m = sub["morning_hours"].mean()
+            e = sub["evening_hours"].mean()
+            n = sub["night_hours"].mean()
+        m_n = math.ceil(m / effective_hours)
+        e_n = math.ceil(e / effective_hours)
+        n_n = math.ceil(n / effective_hours)
+        weekly_template.append({
+            "ward": ward,
+            "weekday": wd,
+            "morning_nurses": m_n,
+            "evening_nurses": e_n,
+            "night_nurses": n_n
+        })
+
 weekly_template_df = pd.DataFrame(weekly_template)
 print("Weekly template (sample):")
 print(weekly_template_df.head(10).to_string(index=False))
 
-# Repeat 13 weeks
+# Step 2. Estimate cost using official pattern rates (approximation)
+# ------------------------------------------------------------------
+patterns = {
+    1: {"morning":5, "evening":0, "night":0, "rest":2, "yearly_cost":52143},
+    2: {"morning":2, "evening":2, "night":2, "rest":4, "yearly_cost":55480},
+    3: {"morning":2, "evening":2, "night":0, "rest":4, "yearly_cost":40150},
+    4: {"morning":0, "evening":0, "night":5, "rest":5, "yearly_cost":54750},
+    5: {"morning":0, "evening":4, "night":2, "rest":4, "yearly_cost":56940},
+}
+for p in patterns.values():
+    p["weekly_cost"] = p["yearly_cost"] / 52
+
+# Approximate total nurses per week (mean of all shift needs)
+avg_weekly_nurses = (
+    weekly_template_df[["morning_nurses","evening_nurses","night_nurses"]].mean().sum()
+)
+# Approximate pattern mix (simple heuristic)
+num_pat1 = int(avg_weekly_nurses * 0.5)  # mainly morning
+num_pat3 = int(avg_weekly_nurses * 0.2)  # mixed day/evening
+num_pat4 = int(avg_weekly_nurses * 0.2)  # night
+num_pat5 = int(avg_weekly_nurses * 0.1)  # mixed evening/night
+
+approx_weekly_cost = (
+    num_pat1 * patterns[1]["weekly_cost"]
+    + num_pat3 * patterns[3]["weekly_cost"]
+    + num_pat4 * patterns[4]["weekly_cost"]
+    + num_pat5 * patterns[5]["weekly_cost"]
+)
+approx_13w_cost = approx_weekly_cost * 13
+
+print(f"\nEstimated weekly nurses (avg): {avg_weekly_nurses:.1f}")
+print(f"Approximate weekly cost: €{approx_weekly_cost:,.0f}")
+print(f"Estimated total 13-week cost: €{approx_13w_cost:,.0f}")
+
+# Step 3. Build 13-week repeating schedule (keeps Part D happy)
+# -------------------------------------------------------------
 schedule_rows = []
-for week in range(1,14):
+for week in range(1, 14):
     for _, r in weekly_template_df.iterrows():
-        schedule_rows.append({"week":week,"ward":r["ward"],"weekday":r["weekday"],"morning_nurses":r["morning_nurses"],"evening_nurses":r["evening_nurses"],"night_nurses":r["night_nurses"]})
+        schedule_rows.append({
+            "week": week,
+            "ward": r["ward"],
+            "weekday": r["weekday"],
+            "morning_nurses": r["morning_nurses"],
+            "evening_nurses": r["evening_nurses"],
+            "night_nurses": r["night_nurses"],
+        })
+
 schedule_13w = pd.DataFrame(schedule_rows)
 print("\n13-week schedule excerpt:")
 print(schedule_13w.head(10).to_string(index=False))
 
-# Cost estimate: derive yearly cost from nurse_costs if possible; otherwise fallback
-yc = None
-for c in nurse_costs.columns:
-    if "year" in c.lower() and "cost" in c.lower():
-        yc = c; break
-if yc is None and not nurse_costs.empty:
-    yc = nurse_costs.columns[-1]
-if yc is not None and not nurse_costs.empty:
-    nurse_costs["yearly_cost"] = pd.to_numeric(nurse_costs[yc], errors='coerce')
-    yearly_cost = float(nurse_costs["yearly_cost"].median()) if "yearly_cost" in nurse_costs.columns else 50000.0
-else:
-    yearly_cost = 50000.0
-weekly_cost_per_nurse = yearly_cost / 52.0
-total_positions_13w = schedule_13w[["morning_nurses","evening_nurses","night_nurses"]].sum().sum()
-estimated_cost_13w = total_positions_13w * weekly_cost_per_nurse
-print(f"Estimated 13-week cost (approx): {estimated_cost_13w:.2f}")
+weekly_cost_per_nurse = 40150 / 52
+MAX_FLEX_PER_SHIFT = 2
 
 # -----------------------------
 # PART D — Flexible nurse integration
