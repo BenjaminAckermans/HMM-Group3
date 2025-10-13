@@ -278,7 +278,7 @@ for ward in SPECIAL_WARDS:
 
 weekly_template_df = pd.DataFrame(weekly_template)
 print("Weekly template (sample):")
-print(weekly_template_df.head(10).to_string(index=False))
+print(weekly_template_df.to_string(index=False))
 
 # Step 2. Estimate cost using official pattern rates (approximation)
 # ------------------------------------------------------------------
@@ -330,7 +330,7 @@ for week in range(1, 14):
 
 schedule_13w = pd.DataFrame(schedule_rows)
 print("\n13-week schedule excerpt:")
-print(schedule_13w.head(10).to_string(index=False))
+print(schedule_13w.head(21).to_string(index=False))
 
 weekly_cost_per_nurse = 40150 / 52
 MAX_FLEX_PER_SHIFT = 2
@@ -374,6 +374,16 @@ weekly_reg_cost = weekly_reg_total * weekly_cost_per_nurse
 weekly_flex_cost = avg_flex_week * weekly_cost_per_nurse * FLEX_COST_MULT
 print(f"Flexible deployments total: {total_flex} (avg/week: {avg_flex_week:.2f})")
 print(f"Weekly regular cost (reduced): {weekly_reg_cost:.2f}, weekly flex cost est: {weekly_flex_cost:.2f}")
+
+# === EXTRA: List all overutilisation cases ===
+overutil_cases = validation_df[validation_df["overutilization"]==True].copy()
+
+# Sort for readability
+overutil_cases = overutil_cases.sort_values(["ward","date","shift"])
+overutil_cases = overutil_cases.iloc[:, :-1]
+
+print("\n=== Overutilisation cases (ward-date-shift) ===")
+print(overutil_cases.to_string(index=False))
 
 # Overutilization comparison (approx)
 fixed_overutil = validation_df["overutilization"].sum()
