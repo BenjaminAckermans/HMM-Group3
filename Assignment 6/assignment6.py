@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 # -----------------------------
 # EDIT THIS PATH before running
-DATA_PATH = r"C:\Users\20222277\OneDrive - TU Eindhoven\Desktop\ID2025\1CK110\HMM-Group3\Assignment 6\Data for Assignment 6.xlsx"
+DATA_PATH = r"Data for Assignment 6.xlsx"
 # -----------------------------
 
 # Load workbook
