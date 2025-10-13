@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 # -----------------------------
 # EDIT THIS PATH before running
-DATA_PATH = r"C:\Users\20222277\OneDrive - TU Eindhoven\Desktop\ID2025\1CK110\HMM-Group3\Assignment 6\Data for Assignment 6.xlsx"
+DATA_PATH = r"Data for Assignment 6.xlsx"
 # -----------------------------
 
 # Load workbook
@@ -211,7 +211,7 @@ print(staffing_df.to_string(index=False))
 validation_rows = []
 req_map = staffing_df.set_index(["ward","shift"])["required_nurses_initial"].to_dict()
 for _, r in agg.iterrows():
-    for shift, col in [("Morning","morning_hours"), ("Evening","evening_hours"), ("Night","night_hours")]:
+    for shift, col in [("morning","morning_hours"), ("evening","evening_hours"), ("night","night_hours")]:
         ward = r["ward"]; date = r["date"]
         workload = r[col]; assigned = int(req_map.get((ward, shift), 0))
         available = assigned * 8

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 # === File path ===
-EXCEL_PATH = "/Users/ariannaperini/Downloads/Data for Assignment 6.xlsx"
+EXCEL_PATH = "Data for Assignment 6.xlsx"
 
 # ------------------ Functions ------------------
 

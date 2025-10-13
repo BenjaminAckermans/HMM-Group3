@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate  # for clean console tables
 
 
-XLS_PATH = "/Users/ariannaperini/Downloads/Data for Assignment 6.xlsx"
+XLS_PATH = "Data for Assignment 6.xlsx"
 HOURS_WINDOW = list(range(8, 21))  # 08:00–21:00
 HOUR_LABELS = [f"{h:02d}:00-{h+1:02d}:00" for h in HOURS_WINDOW]
 MIN_NURSES = 1
