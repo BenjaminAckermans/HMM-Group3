@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import math
 import warnings
 warnings.filterwarnings('ignore')
-
+!pip install pulp
 # solver
 try:
     import pulp
@@ -16,7 +16,7 @@ except Exception:
     raise ImportError("Please install 'pulp' (pip install pulp) to run LP/MILP parts.")
 
 # file path
-XLS_PATH = "/Users/ariannaperini/Downloads/Data for Assignment 7.xlsx" #change this for your laptop
+XLS_PATH = r"C:\Users\20222277\OneDrive - TU Eindhoven\Desktop\ID2025\1CK110\HMM-Group3\Assignment 7\Data for Assignment 7.xlsx" #change this for your laptop
 
 # constants
 WEEKS_PER_YEAR = 52
@@ -422,6 +422,12 @@ for (sid,t), var in X.items():
         lp_assigned.setdefault(sid, {})[t] = var.varValue
 lp_total_hours = sum(var.varValue for var in prob.variables() if var.name.startswith('X_'))
 print(f"  LP assigned total hours = {lp_total_hours:.1f}")
+
+print("\nDetailed LP results per task:")
+for t in TASKS:
+    total = sum(var.varValue for (sid,tt), var in X.items() if tt == t)
+    required = task_req.get(t, 0.0)
+    print(f"  {t}: required = {required:.1f} h, assigned = {total:.1f} h, diff = {total - required:.1f}")
 
 # ---- Part C: MILP with binary hires Z_i ----
 prob2 = pulp.LpProblem("CapacityPlanning_MILP", pulp.LpMinimize)
