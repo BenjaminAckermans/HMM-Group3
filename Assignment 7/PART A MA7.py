@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-file_path = "/Users/ariannaperini/Downloads/Data for Assignment 7.xlsx" #change this
+file_path = "Data for Assignment 7.xlsx" #change this
 
 # Read sheets
 patients = pd.read_excel(file_path, sheet_name='Patients')
