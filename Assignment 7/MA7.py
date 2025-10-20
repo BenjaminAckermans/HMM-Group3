@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import math
 import warnings
 warnings.filterwarnings('ignore')
-!pip install pulp
+#!pip install pulp
 # solver
 try:
     import pulp
@@ -16,7 +16,7 @@ except Exception:
     raise ImportError("Please install 'pulp' (pip install pulp) to run LP/MILP parts.")
 
 # file path
-XLS_PATH = r"C:\Users\20222277\OneDrive - TU Eindhoven\Desktop\ID2025\1CK110\HMM-Group3\Assignment 7\Data for Assignment 7.xlsx" #change this for your laptop
+XLS_PATH = r"Data for Assignment 7.xlsx" #change this for your laptop
 
 # constants
 WEEKS_PER_YEAR = 52
@@ -467,45 +467,61 @@ for (sid,t), var in X2.items():
     if var.varValue and var.varValue>0.0:
         milp_assigned.setdefault(sid, {})[t] = var.varValue
 
-# ---- Part D: MILP with slack (10%) ----
-SLACK = 0.10
-task_req_slack = {t: task_req.get(t,0.0)*(1+SLACK) for t in TASKS}
-prob3 = pulp.LpProblem("CapacityPlanning_MILP_Slack", pulp.LpMinimize)
-X3 = {}
-Z3 = {}
-for _, row in df_specs.iterrows():
-    sid = row['spec_id']
-    Z3[sid] = pulp.LpVariable(f"Z3_{sid}", lowBound=0, upBound=1, cat='Binary')
-    fte = float(row.get('fte',1.0))
+# ---- Part D: MILP with multiple slack levels ----
+for SLACK in [0.10, 0.15, 0.20]:
+    print(f"\n=== Solving MILP with {int(SLACK*100)}% slack ===")
+
+    task_req_slack = {t: task_req.get(t,0.0) * (1 + SLACK) for t in TASKS}
+    prob_slack = pulp.LpProblem(f"CapacityPlanning_MILP_Slack_{int(SLACK*100)}", pulp.LpMinimize)
+
+    Xs = {}
+    Zs = {}
+
+    # variable creation
+    for _, row in df_specs.iterrows():
+        sid = row['spec_id']
+        Zs[sid] = pulp.LpVariable(f"Z_{int(SLACK*100)}_{sid}", lowBound=0, upBound=1, cat='Binary')
+        fte = float(row.get('fte', 1.0))
+        for t in TASKS:
+            allowed = True
+            if t.startswith("WARD_") or t.startswith("OPD_"):
+                sub = int(t.split("_")[1])
+                allowed = bool(S.get(sid, {}).get(sub, 0))
+            if t.startswith("OR_"):
+                allowed = (sum(S.get(sid, {}).values()) > 0)
+            if allowed:
+                Xs[(sid,t)] = pulp.LpVariable(f"X_{int(SLACK*100)}_{sid}_{t}", lowBound=0)
+
+    # objective
+    prob_slack += pulp.lpSum([
+        float(df_specs.loc[df_specs['spec_id']==sid,'fte'].iloc[0]) * Zs[sid] for sid in Zs
+    ]) + 1e-3 * pulp.lpSum([Xs[(sid,t)] for (sid,t) in Xs])
+
+    # demand constraints
     for t in TASKS:
-        allowed = True
-        if t.startswith("WARD_") or t.startswith("OPD_"):
-            sub = int(t.split("_")[1])
-            allowed = bool(S.get(sid, {}).get(sub, 0))
-        if t.startswith("OR_"):
-            allowed = (sum(S.get(sid, {}).values())>0)
-        if allowed:
-            X3[(sid,t)] = pulp.LpVariable(f"X3_{sid}_{t}", lowBound=0)
-prob3 += pulp.lpSum([float(df_specs.loc[df_specs['spec_id']==sid,'fte'].iloc[0]) * Z3[sid] for sid in Z3]) + 1e-3 * pulp.lpSum([X3[(sid,t)] for (sid,t) in X3])
-for t in TASKS:
-    prob3 += pulp.lpSum([X3[(sid,t)] for (sid,tt) in X3 if tt==t]) >= task_req_slack.get(t,0.0)
-for _, row in df_specs.iterrows():
-    sid = row['spec_id']
-    fte = float(row.get('fte',1.0))
-    annual = HOURS_PER_YEAR * fte
-    prob3 += pulp.lpSum([X3[(sid,t)] for (sid_,t) in X3 if sid_==sid]) <= annual * Z3[sid]
-prob3.solve(pulp.PULP_CBC_CMD(msg=False))
-print("PART D MILP with slack status:", pulp.LpStatus[prob3.status])
-hired_slack = {sid: int(Zvar.varValue or 0) for sid, Zvar in Z3.items()}
-print("  hired with slack count:", sum(hired_slack.values()))
-assigned_with_slack = {}
-for (sid,t), var in X3.items():
-    if var.varValue and var.varValue>0:
-        assigned_with_slack.setdefault(sid, {})[t] = var.varValue
+        prob_slack += pulp.lpSum([Xs[(sid,t)] for (sid,tt) in Xs if tt==t]) >= task_req_slack.get(t,0.0)
+
+    # capacity constraints
+    for _, row in df_specs.iterrows():
+        sid = row['spec_id']
+        fte = float(row.get('fte', 1.0))
+        annual = HOURS_PER_YEAR * fte
+        prob_slack += pulp.lpSum([Xs[(sid,t)] for (sid_,t) in Xs if sid_==sid]) <= annual * Zs[sid]
+
+    # solve
+    prob_slack.solve(pulp.PULP_CBC_CMD(msg=False))
+    print(f"  Status: {pulp.LpStatus[prob_slack.status]}")
+
+    hired_slack = {sid: int(Zvar.varValue or 0) for sid, Zvar in Zs.items()}
+    print(f"  Specialists hired: {sum(hired_slack.values())}")
+
+    assigned_with_slack = {}
+    for (sid,t), var in Xs.items():
+        if var.varValue and var.varValue > 0:
+            assigned_with_slack.setdefault(sid, {})[t] = var.varValue
 
 # ---- Part E: weekly schedule heuristic and simulation ----
-# use hires from Part D (hired_slack) and assigned_with_slack hours
-hired_specs = [sid for sid,z in hired_slack.items() if z==1]
+# use 15% slack hires from Part D (hired_slack) and assigned_with_slack hours
 if len(hired_specs)==0:
     # fallback: pick top FTE specialists
     hired_specs = df_specs.sort_values('fte', ascending=False)['spec_id'].tolist()[:max(1, math.ceil(len(spec_ids)/2))]
